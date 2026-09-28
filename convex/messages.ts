@@ -13,11 +13,13 @@ export const listMessages = query({
       .collect();
   },
 });
-
 export const sendMessage = mutation({
   args: {
     chatRoomId: v.id("chatRooms"),
     content: v.string(),
+    replyToId: v.optional(v.id("messages")),
+    replyToSender: v.optional(v.string()),
+    replyToText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -41,10 +43,13 @@ export const sendMessage = mutation({
       senderName: user.name ?? user.email ?? "Гравець",
       senderPhoto: user.image,
       content: trimmedContent,
+      replyToId: args.replyToId,
+      replyToSender: args.replyToSender,
+      replyToText: args.replyToText,
     });
 
     await ctx.db.patch(args.chatRoomId, {
-      lastMessage: trimmedContent,
+      lastMessage: `${user.name ?? "Гравець"}: ${trimmedContent}`,
       lastMessageAt: Date.now(),
     });
 
@@ -147,12 +152,14 @@ export const generateUploadUrl = mutation(async (ctx) => {
 
 /**
  * Відправка повідомлення з медіафайлом
- */
-export const sendMediaMessage = mutation({
+ */ export const sendMediaMessage = mutation({
   args: {
     chatRoomId: v.id("chatRooms"),
     storageId: v.id("_storage"),
     caption: v.optional(v.string()),
+    replyToId: v.optional(v.id("messages")),
+    replyToSender: v.optional(v.string()),
+    replyToText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -175,15 +182,18 @@ export const sendMediaMessage = mutation({
     const messageId = await ctx.db.insert("messages", {
       chatRoomId: args.chatRoomId,
       senderId: userId,
-      senderName: user.name ?? user.email ?? "Користувач",
+      senderName: user.name ?? user.email ?? "Гравець",
       senderPhoto: user.image,
+      content: trimmedCaption,
       imageUrl,
       storageId: args.storageId,
-      content: trimmedCaption,
+      replyToId: args.replyToId,
+      replyToSender: args.replyToSender,
+      replyToText: args.replyToText,
     });
 
     await ctx.db.patch(args.chatRoomId, {
-      lastMessage: `${user.name ?? "Користувач"}: 📷 Фото${
+      lastMessage: `${user.name ?? "Гравець"}: 📷 Фото${
         trimmedCaption ? ` (${trimmedCaption})` : ""
       }`,
       lastMessageAt: Date.now(),

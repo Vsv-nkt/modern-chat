@@ -20,6 +20,11 @@ import {
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { ImageViewerModal } from "../../components/ImageViewerModal";
+import { ReplyPreviewBar, ReplyTarget } from "../../components/ReplyPreviewBar";
+import {
+  MessageItemData,
+  SwipeableMessageItem,
+} from "../../components/SwipeableMessageItem";
 import { TypingDots } from "../../components/TypingDots";
 import { COLORS } from "../../constants/theme";
 
@@ -47,6 +52,7 @@ export default function ChatScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const lastTypingSentRef = useRef(0);
 
   useEffect(() => {
@@ -57,7 +63,6 @@ export default function ChatScreen() {
     }
   }, [messages?.length]);
 
-  // Обработка ввода с тротлингом (typing indicator)
   const handleTextChange = (text: string) => {
     setInputText(text);
 
@@ -68,7 +73,6 @@ export default function ChatScreen() {
     }
   };
 
-  // Выбор фото
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -80,7 +84,17 @@ export default function ChatScreen() {
       setSelectedImageUri(result.assets[0].uri);
     }
   };
-  const handleSendOrSave = async () => {
+
+  const handleStartReply = (msg: MessageItemData) => {
+    setReplyTarget({
+      messageId: msg._id,
+      senderName: msg.senderName,
+      text: msg.content || (msg.imageUrl ? "📷 Фотографія" : ""),
+    });
+    setEditingMessageId(null);
+  };
+
+  const handleSend = async () => {
     const text = inputText.trim();
     if ((!text && !selectedImageUri) || isSubmitting) return;
 
@@ -110,11 +124,27 @@ export default function ChatScreen() {
           chatRoomId,
           storageId,
           caption: text || undefined,
+          replyToId: replyTarget
+            ? (replyTarget.messageId as Id<"messages">)
+            : undefined,
+          replyToSender: replyTarget?.senderName,
+          replyToText: replyTarget?.text,
         });
 
         setSelectedImageUri(null);
+        setReplyTarget(null);
       } else {
-        await sendMessage({ chatRoomId, content: text });
+        await sendMessage({
+          chatRoomId,
+          content: text,
+          replyToId: replyTarget
+            ? (replyTarget.messageId as Id<"messages">)
+            : undefined,
+          replyToSender: replyTarget?.senderName,
+          replyToText: replyTarget?.text,
+        });
+
+        setReplyTarget(null);
       }
 
       setInputText("");
@@ -125,65 +155,52 @@ export default function ChatScreen() {
       setIsSubmitting(false);
     }
   };
-  const handleMessageLongPress = (message: {
-    _id: Id<"messages">;
-    senderId: Id<"users">;
-    content?: string;
-  }) => {
-    if (message.senderId !== currentUser?._id) return;
 
-    const options: any[] = [];
+  const handleMessageLongPress = (item: MessageItemData) => {
+    const isOwn = item.senderId === currentUser?._id;
+    const options: any[] = [
+      {
+        text: "Відповісти",
+        onPress: () => handleStartReply(item),
+      },
+    ];
 
-    if (message.content) {
+    if (isOwn) {
+      if (item.content) {
+        options.push({
+          text: "Редагувати",
+          onPress: () => {
+            setEditingMessageId(item._id);
+            setInputText(item.content || "");
+            setReplyTarget(null);
+          },
+        });
+      }
+
       options.push({
-        text: "Редагувати",
+        text: "Видалити",
+        style: "destructive",
         onPress: () => {
-          setEditingMessageId(message._id);
-          setInputText(message.content || "");
+          Alert.alert("Видалити повідомлення?", "Ви впевнені?", [
+            { text: "Скасувати", style: "cancel" },
+            {
+              text: "Так, видалити",
+              style: "destructive",
+              onPress: () => deleteMessage({ messageId: item._id }),
+            },
+          ]);
         },
       });
     }
-
-    options.push({
-      text: "Видалити",
-      style: "destructive",
-      onPress: () => confirmDelete(message._id),
-    });
 
     options.push({ text: "Скасувати", style: "cancel" });
 
     Alert.alert("Дії з повідомленням", undefined, options);
   };
 
-  const confirmDelete = (messageId: Id<"messages">) => {
-    Alert.alert("Видалити повідомлення", "Ви впевнені?", [
-      { text: "Ні", style: "cancel" },
-      {
-        text: "Так, видалити",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteMessage({ messageId });
-          } catch (err) {
-            console.error(err);
-            Alert.alert("Помилка", "Не вдалося видалити");
-          }
-        },
-      },
-    ]);
-  };
-
   const cancelEditing = () => {
     setEditingMessageId(null);
     setInputText("");
-  };
-
-  const formatTime = (timestamp?: number) => {
-    if (!timestamp) return "";
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   if (!room || messages === undefined) {
@@ -235,70 +252,31 @@ export default function ChatScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const isMe = currentUser && item.senderId === currentUser._id;
-
-          return (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onLongPress={() => handleMessageLongPress(item)}
-              delayLongPress={300}
-              className={`flex-row ${isMe ? "justify-end" : "justify-start"}`}
-            >
-              <View
-                className={`max-w-[80%] rounded-2xl p-3 ${
-                  isMe
-                    ? "bg-primary rounded-br-none"
-                    : "bg-secondary border border-surfaceLight rounded-bl-none"
-                }`}
-              >
-                {!isMe && (
-                  <Text className="text-primary text-xs font-bold mb-1">
-                    {item.senderName}
-                  </Text>
-                )}
-
-                {item.imageUrl && (
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setFullscreenImage(item.imageUrl!)}
-                  >
-                    <Image
-                      source={{ uri: item.imageUrl }}
-                      className="w-56 h-56 rounded-xl mb-1 bg-surface"
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                )}
-
-                {item.content ? (
-                  <Text className="text-white text-base leading-5">
-                    {item.content}
-                  </Text>
-                ) : null}
-
-                <View className="flex-row items-center justify-end mt-1 gap-1">
-                  {item.isEdited && (
-                    <Text className="text-white/60 text-[10px] italic">
-                      (ред.)
-                    </Text>
-                  )}
-                  <Text className="text-white/60 text-[10px]">
-                    {formatTime(item._creationTime)}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={({ item }) => (
+          <SwipeableMessageItem
+            item={item as MessageItemData}
+            isOwn={item.senderId === currentUser?._id}
+            onLongPress={() => handleMessageLongPress(item as MessageItemData)}
+            onReply={handleStartReply}
+            onImagePress={(url) => setFullscreenImage(url)}
+            onAuthorPress={(authorId) =>
+              router.push(`/user/${authorId}` as any)
+            }
+          />
+        )}
       />
 
-      {/* Typing indicator */}
       {typingUsers && typingUsers.length > 0 && (
         <TypingDots typingUsers={typingUsers} />
       )}
 
-      {/* Editing bar */}
+      {replyTarget && (
+        <ReplyPreviewBar
+          replyTarget={replyTarget}
+          onCancel={() => setReplyTarget(null)}
+        />
+      )}
+
       {editingMessageId && (
         <View className="flex-row items-center justify-between px-4 py-2 bg-surfaceLight border-t border-surface">
           <View className="flex-row items-center flex-1 mr-2">
@@ -318,7 +296,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Selected image preview */}
       {selectedImageUri && (
         <View className="flex-row items-center px-4 py-2 bg-surfaceLight border-t border-surface">
           <Image
@@ -332,7 +309,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Input bar */}
       <View className="px-4 py-3 bg-surface border-t border-surfaceLight flex-row items-end gap-2">
         <TouchableOpacity
           onPress={pickImage}
@@ -347,9 +323,11 @@ export default function ChatScreen() {
           placeholder={
             editingMessageId
               ? "Змініть текст..."
-              : selectedImageUri
-                ? "Підпис до фото..."
-                : "Напишіть повідомлення..."
+              : replyTarget
+                ? `Відповідь для ${replyTarget.senderName}...`
+                : selectedImageUri
+                  ? "Підпис до фото..."
+                  : "Напишіть повідомлення..."
           }
           placeholderTextColor={COLORS.textMuted}
           value={inputText}
@@ -358,7 +336,7 @@ export default function ChatScreen() {
         />
 
         <TouchableOpacity
-          onPress={handleSendOrSave}
+          onPress={handleSend}
           disabled={(!inputText.trim() && !selectedImageUri) || isSubmitting}
           className={`w-11 h-11 rounded-2xl items-center justify-center ${
             (inputText.trim() || selectedImageUri) && !isSubmitting
@@ -383,7 +361,6 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Fullscreen image viewer */}
       <ImageViewerModal
         visible={!!fullscreenImage}
         imageUrl={fullscreenImage}
