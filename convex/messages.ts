@@ -1,5 +1,6 @@
 // convex/messages.ts
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -13,6 +14,26 @@ export const listMessages = query({
       .collect();
   },
 });
+
+export const getPaginatedMessages = query({
+  args: {
+    chatRoomId: v.id("chatRooms"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    return await ctx.db
+      .query("messages")
+      .withIndex("by_chat_room", (q) => q.eq("chatRoomId", args.chatRoomId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+
 export const sendMessage = mutation({
   args: {
     chatRoomId: v.id("chatRooms"),
@@ -23,19 +44,13 @@ export const sendMessage = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Unauthorized: Потрібна авторизація");
-    }
+    if (!userId) throw new Error("Unauthorized");
 
     const user = await ctx.db.get(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) throw new Error("User not found");
 
     const trimmedContent = args.content.trim();
-    if (!trimmedContent) {
-      throw new Error("Message content cannot be empty");
-    }
+    if (!trimmedContent) throw new Error("Message content cannot be empty");
 
     const messageId = await ctx.db.insert("messages", {
       chatRoomId: args.chatRoomId,
@@ -56,9 +71,7 @@ export const sendMessage = mutation({
     return messageId;
   },
 });
-/**
- * Редагування тексту власного повідомлення
- */
+
 export const editMessage = mutation({
   args: {
     messageId: v.id("messages"),
@@ -66,23 +79,14 @@ export const editMessage = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Unauthorized: Потрібна авторизація");
-    }
+    if (!userId) throw new Error("Unauthorized");
 
     const message = await ctx.db.get(args.messageId);
-    if (!message) {
-      throw new Error("Message not found");
-    }
-
-    if (message.senderId !== userId) {
-      throw new Error("Forbidden: Тільки власні повідомлення");
-    }
+    if (!message) throw new Error("Message not found");
+    if (message.senderId !== userId) throw new Error("Forbidden");
 
     const trimmedContent = args.content.trim();
-    if (!trimmedContent) {
-      throw new Error("Повідомлення не може бути порожнім");
-    }
+    if (!trimmedContent) throw new Error("Повідомлення не може бути порожнім");
 
     await ctx.db.patch(args.messageId, {
       content: trimmedContent,
@@ -98,26 +102,15 @@ export const editMessage = mutation({
   },
 });
 
-/**
- * Видалення власного повідомлення
- */
 export const deleteMessage = mutation({
-  args: {
-    messageId: v.id("messages"),
-  },
+  args: { messageId: v.id("messages") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Unauthorized: Потрібна авторизація");
-    }
+    if (!userId) throw new Error("Unauthorized");
 
     const message = await ctx.db.get(args.messageId);
-    if (!message) {
-      throw new Error("Message not found");
-    }
-    if (message.senderId !== userId) {
-      throw new Error("Forbidden: Тільки власні повідомлення");
-    }
+    if (!message) throw new Error("Message not found");
+    if (message.senderId !== userId) throw new Error("Forbidden");
 
     if (message.storageId) {
       await ctx.storage.delete(message.storageId);
@@ -139,20 +132,14 @@ export const deleteMessage = mutation({
     });
   },
 });
-/**
- * Генерація посилання для завантаження файлу
- */
+
 export const generateUploadUrl = mutation(async (ctx) => {
   const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new Error("Unauthorized: Потрібна авторизація");
-  }
+  if (!userId) throw new Error("Unauthorized");
   return await ctx.storage.generateUploadUrl();
 });
 
-/**
- * Відправка повідомлення з медіафайлом
- */ export const sendMediaMessage = mutation({
+export const sendMediaMessage = mutation({
   args: {
     chatRoomId: v.id("chatRooms"),
     storageId: v.id("_storage"),
@@ -163,19 +150,13 @@ export const generateUploadUrl = mutation(async (ctx) => {
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Unauthorized: Потрібна авторизація");
-    }
+    if (!userId) throw new Error("Unauthorized");
 
     const user = await ctx.db.get(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) throw new Error("User not found");
 
     const imageUrl = await ctx.storage.getUrl(args.storageId);
-    if (!imageUrl) {
-      throw new Error("Не вдалося отримати URL зображення");
-    }
+    if (!imageUrl) throw new Error("Не вдалося отримати URL зображення");
 
     const trimmedCaption = args.caption?.trim();
 
@@ -214,19 +195,13 @@ export const sendAudioMessage = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Unauthorized");
-    }
+    if (!userId) throw new Error("Unauthorized");
 
     const user = await ctx.db.get(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) throw new Error("User not found");
 
     const audioUrl = await ctx.storage.getUrl(args.audioStorageId);
-    if (!audioUrl) {
-      throw new Error("Не вдалося отримати URL аудіо");
-    }
+    if (!audioUrl) throw new Error("Не вдалося отримати URL аудіо");
 
     const messageId = await ctx.db.insert("messages", {
       chatRoomId: args.chatRoomId,
@@ -243,6 +218,42 @@ export const sendAudioMessage = mutation({
 
     await ctx.db.patch(args.chatRoomId, {
       lastMessage: "🎤 Голосове повідомлення",
+      lastMessageAt: Date.now(),
+    });
+
+    return messageId;
+  },
+});
+
+export const sendVideoNoteMessage = mutation({
+  args: {
+    chatRoomId: v.id("chatRooms"),
+    videoStorageId: v.id("_storage"),
+    videoDuration: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    const videoUrl = await ctx.storage.getUrl(args.videoStorageId);
+    if (!videoUrl) throw new Error("Не вдалося отримати URL відео");
+
+    const messageId = await ctx.db.insert("messages", {
+      chatRoomId: args.chatRoomId,
+      senderId: userId,
+      senderName: user.name ?? user.email?.split("@")[0] ?? "Гравець",
+      senderPhoto: user.image,
+      videoUrl,
+      videoStorageId: args.videoStorageId,
+      videoDuration: args.videoDuration,
+      isVideoNote: true,
+    });
+
+    await ctx.db.patch(args.chatRoomId, {
+      lastMessage: "📹 Відеокружечок",
       lastMessageAt: Date.now(),
     });
 

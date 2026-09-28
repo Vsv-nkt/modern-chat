@@ -38,6 +38,10 @@ export default defineSchema({
     audioUrl: v.optional(v.string()),
     audioStorageId: v.optional(v.id("_storage")),
     audioDuration: v.optional(v.number()),
+    videoUrl: v.optional(v.string()),
+    videoStorageId: v.optional(v.id("_storage")),
+    videoDuration: v.optional(v.number()),
+    isVideoNote: v.optional(v.boolean()),
   }).index("by_chat_room", ["chatRoomId"]),
 
   typingIndicators: defineTable({

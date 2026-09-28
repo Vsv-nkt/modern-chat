@@ -26,6 +26,9 @@ export interface MessageItemData {
   replyToText?: string;
   audioUrl?: string;
   audioDuration?: number;
+  videoUrl?: string;
+  videoDuration?: number;
+  isVideoNote?: boolean;
   _creationTime: number;
 }
 
@@ -129,6 +132,12 @@ export const SwipeableMessageItem: React.FC<SwipeableMessageItemProps> = ({
             activeOpacity={0.9}
             onLongPress={onLongPress}
             onPress={handleTap}
+            {...({
+              onContextMenu: (e: any) => {
+                e.preventDefault();
+                onLongPress();
+              },
+            } as any)}
             className={`rounded-2xl p-3 ${
               isOwn
                 ? "bg-primary rounded-br-none"

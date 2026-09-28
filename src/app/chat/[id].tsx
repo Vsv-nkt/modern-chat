@@ -1,6 +1,6 @@
 // src/app/chat/[id].tsx
 import { Ionicons } from "@expo/vector-icons";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -26,6 +26,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { ImageViewerModal } from "../../components/ImageViewerModal";
+import { MessageActionsModal } from "../../components/MessageActionsModal";
 import { ReactionPickerModal } from "../../components/ReactionPickerModal";
 import { ReplyPreviewBar, ReplyTarget } from "../../components/ReplyPreviewBar";
 import {
@@ -33,8 +34,12 @@ import {
   SwipeableMessageItem,
 } from "../../components/SwipeableMessageItem";
 import { TypingDots } from "../../components/TypingDots";
+import { VideoNotePlayer } from "../../components/VideoNotePlayer";
+import { VideoNoteRecorder } from "../../components/VideoNoteRecorder";
 import { VoiceMessagePlayer } from "../../components/VoiceMessagePlayer";
 import { COLORS } from "../../constants/theme";
+
+const MESSAGES_PAGE_SIZE = 25;
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,9 +48,19 @@ export default function ChatScreen() {
 
   const chatRoomId = id as Id<"chatRooms">;
   const room = useQuery(api.rooms.getRoom, { roomId: chatRoomId });
-  const messages = useQuery(api.messages.listMessages, { chatRoomId });
   const currentUser = useQuery(api.users.currentUser);
   const typingUsers = useQuery(api.typing.getTypingUsers, { chatRoomId });
+
+  const {
+    results: messages,
+    status,
+    loadMore,
+    isLoading,
+  } = usePaginatedQuery(
+    api.messages.getPaginatedMessages,
+    { chatRoomId },
+    { initialNumItems: MESSAGES_PAGE_SIZE },
+  );
 
   const sendMessage = useMutation(api.messages.sendMessage);
   const editMessage = useMutation(api.messages.editMessage);
@@ -53,6 +68,7 @@ export default function ChatScreen() {
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const sendMediaMessage = useMutation(api.messages.sendMediaMessage);
   const sendAudioMessage = useMutation(api.messages.sendAudioMessage);
+  const sendVideoNoteMessage = useMutation(api.messages.sendVideoNoteMessage);
   const setTyping = useMutation(api.typing.setTyping);
   const toggleReaction = useMutation(api.reactions.toggleReaction);
 
@@ -68,6 +84,10 @@ export default function ChatScreen() {
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reactionPickerMessageId, setReactionPickerMessageId] =
     useState<Id<"messages"> | null>(null);
+  const [actionsMessage, setActionsMessage] = useState<MessageItemData | null>(
+    null,
+  );
+  const [isVideoRecorderVisible, setIsVideoRecorderVisible] = useState(false);
   const lastTypingSentRef = useRef(0);
 
   useEffect(() => {
@@ -77,6 +97,12 @@ export default function ChatScreen() {
       }, 100);
     }
   }, [messages?.length]);
+
+  const handleLoadMore = () => {
+    if (status === "CanLoadMore") {
+      loadMore(MESSAGES_PAGE_SIZE);
+    }
+  };
 
   const handleTextChange = (text: string) => {
     setInputText(text);
@@ -104,7 +130,13 @@ export default function ChatScreen() {
     setReplyTarget({
       messageId: msg._id,
       senderName: msg.senderName,
-      text: msg.content || (msg.imageUrl ? "📷 Фотографія" : "🎤 Голосове"),
+      text:
+        msg.content ||
+        (msg.imageUrl
+          ? "📷 Фотографія"
+          : msg.audioUrl
+            ? "🎤 Голосове"
+            : "📹 Відео"),
     });
     setEditingMessageId(null);
   };
@@ -246,50 +278,37 @@ export default function ChatScreen() {
     }
   };
 
-  const handleMessageLongPress = (item: MessageItemData) => {
-    const isOwn = item.senderId === currentUser?._id;
-    const options: any[] = [
-      {
-        text: "Відповісти",
-        onPress: () => handleStartReply(item),
-      },
-      {
-        text: "Реакція",
-        onPress: () => setReactionPickerMessageId(item._id),
-      },
-    ];
+  const handleSendVideoNote = async (videoUri: string, duration: number) => {
+    try {
+      setIsSubmitting(true);
 
-    if (isOwn) {
-      if (item.content) {
-        options.push({
-          text: "Редагувати",
-          onPress: () => {
-            setEditingMessageId(item._id);
-            setInputText(item.content || "");
-            setReplyTarget(null);
-          },
-        });
-      }
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(videoUri);
+      const blob = await response.blob();
 
-      options.push({
-        text: "Видалити",
-        style: "destructive",
-        onPress: () => {
-          Alert.alert("Видалити повідомлення?", "Ви впевнені?", [
-            { text: "Скасувати", style: "cancel" },
-            {
-              text: "Так, видалити",
-              style: "destructive",
-              onPress: () => deleteMessage({ messageId: item._id }),
-            },
-          ]);
-        },
+      const uploadResult = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "video/webm" },
+        body: blob,
       });
+
+      const { storageId } = await uploadResult.json();
+
+      await sendVideoNoteMessage({
+        chatRoomId,
+        videoStorageId: storageId,
+        videoDuration: duration,
+      });
+    } catch (error) {
+      console.error("Помилка відправки відео:", error);
+      Alert.alert("Помилка", "Не вдалося надіслати відеокружечок");
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    options.push({ text: "Скасувати", style: "cancel" });
-
-    Alert.alert("Дії з повідомленням", undefined, options);
+  const handleMessageLongPress = (item: MessageItemData) => {
+    setActionsMessage(item);
   };
 
   const cancelEditing = () => {
@@ -337,18 +356,30 @@ export default function ChatScreen() {
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item._id}
+        inverted={true}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          status === "LoadingMore" ? (
+            <View className="py-4 items-center w-full">
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            </View>
+          ) : null
+        }
         contentContainerStyle={{ paddingVertical: 16, gap: 4 }}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-20">
-            <Ionicons
-              name="chatbubble-ellipses-outline"
-              size={40}
-              color={COLORS.textMuted}
-            />
-            <Text className="text-textMuted text-sm mt-2 text-center">
-              Повідомлень ще немає. Напишіть першим!
-            </Text>
-          </View>
+          !isLoading ? (
+            <View className="py-12 items-center justify-center">
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={40}
+                color={COLORS.textMuted}
+              />
+              <Text className="text-textMuted text-sm mt-2 text-center">
+                Повідомлень ще немає. Напишіть першим!
+              </Text>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => {
           const isMe = item.senderId === currentUser?._id;
@@ -388,6 +419,23 @@ export default function ChatScreen() {
                       isMyMessage={false}
                     />
                   </View>
+                </View>
+              )}
+
+              {item.videoUrl && item.isVideoNote && (
+                <View
+                  style={{
+                    width: "100%",
+                    paddingHorizontal: 16,
+                    alignItems: isMe ? "flex-end" : "flex-start",
+                    marginTop: 4,
+                  }}
+                >
+                  <VideoNotePlayer
+                    videoUrl={item.videoUrl}
+                    duration={item.videoDuration}
+                    size={200}
+                  />
                 </View>
               )}
             </View>
@@ -473,6 +521,18 @@ export default function ChatScreen() {
             <Ionicons name="image-outline" size={22} color={COLORS.primary} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            onPress={() => setIsVideoRecorderVisible(true)}
+            disabled={isSubmitting}
+            className="w-11 h-11 rounded-2xl items-center justify-center bg-secondary"
+          >
+            <Ionicons
+              name="videocam-outline"
+              size={22}
+              color={COLORS.primary}
+            />
+          </TouchableOpacity>
+
           <TextInput
             className="flex-1 bg-secondary border border-surfaceLight rounded-2xl px-4 py-2.5 text-white text-base max-h-28 min-h-[42px]"
             placeholder={
@@ -544,6 +604,58 @@ export default function ChatScreen() {
             }
           }
         }}
+      />
+
+      <MessageActionsModal
+        visible={!!actionsMessage}
+        onClose={() => setActionsMessage(null)}
+        actions={
+          actionsMessage
+            ? [
+                {
+                  text: "Відповісти",
+                  icon: "arrow-undo",
+                  onPress: () => handleStartReply(actionsMessage),
+                },
+                {
+                  text: "Реакція",
+                  icon: "happy-outline",
+                  onPress: () => setReactionPickerMessageId(actionsMessage._id),
+                },
+                ...(actionsMessage.senderId === currentUser?._id
+                  ? [
+                      ...(actionsMessage.content
+                        ? [
+                            {
+                              text: "Редагувати",
+                              icon: "pencil",
+                              onPress: () => {
+                                setEditingMessageId(actionsMessage._id);
+                                setInputText(actionsMessage.content || "");
+                                setReplyTarget(null);
+                              },
+                            },
+                          ]
+                        : []),
+                      {
+                        text: "Видалити",
+                        icon: "trash-outline",
+                        destructive: true,
+                        onPress: () => {
+                          deleteMessage({ messageId: actionsMessage._id });
+                        },
+                      },
+                    ]
+                  : []),
+              ]
+            : []
+        }
+      />
+
+      <VideoNoteRecorder
+        visible={isVideoRecorderVisible}
+        onClose={() => setIsVideoRecorderVisible(false)}
+        onSendVideo={handleSendVideoNote}
       />
     </KeyboardAvoidingView>
   );

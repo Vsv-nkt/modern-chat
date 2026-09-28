@@ -9,12 +9,16 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Додатку Modern Chat потрібен доступ до мікрофона для запису голосових повідомлень."
+        "NSMicrophoneUsageDescription": "Додатку Modern Chat потрібен доступ до мікрофона для запису голосових повідомлень.",
+        "NSCameraUsageDescription": "Modern Chat потрібен доступ до камери для запису відеокружечків."
       },
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "permissions": ["android.permission.RECORD_AUDIO"],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -34,6 +38,13 @@
         "expo-audio",
         {
           "microphonePermission": "Додатку Modern Chat потрібен доступ до мікрофона для запису голосових повідомлень."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Modern Chat потрібен доступ до камери для запису відеокружечків.",
+          "microphonePermission": "Modern Chat потрібен доступ до мікрофона для запису звуку у відеокружечках."
         }
       ]
     ]
