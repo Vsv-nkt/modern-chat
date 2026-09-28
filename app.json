@@ -17,7 +17,10 @@
     "android": {
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -25,7 +28,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.nikita2009.modernchat"
     },
     "web": {
       "output": "static",
@@ -47,6 +51,13 @@
           "microphonePermission": "Modern Chat потрібен доступ до мікрофона для запису звуку у відеокружечках."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2d06db2a-cd9c-4485-9298-fbb16a8fc686"
+      }
+    },
+    "owner": "nikita2009"
   }
 }

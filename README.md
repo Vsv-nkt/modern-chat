@@ -1,21 +1,8 @@
-## 🆕 ДЗ 12: Відеокружечки та курсорна пагінація
+## 🆕 ДЗ 13: Standalone APK
 
-### 📹 Відеокружечки (Telegram-style)
+- Профіль `preview` у `eas.json` — APK для тестування.
+- Профіль `production` — AAB для Google Play.
+- APK працює **автономно** без Metro Bundler.
+- Підключається до Convex через інтернет.
 
-- Запис через `expo-camera` (мобільний) або **MediaRecorder** (web).
-- Кругле прев'ю камери, таймер до 60 секунд.
-- Перемикання фронтальної / основної камери.
-- Екран підтвердження: 🗑 (скасувати) та ↑ (відправити).
-- Завантаження `.mp4` / `.webm` у Convex Storage.
-- Плеєр `VideoNotePlayer` з круговим SVG-прогресом.
-
-### ⚡ Курсорна пагінація чату
-
-- `usePaginatedQuery` + `paginationOptsValidator`.
-- Порції по 25 повідомлень.
-- `FlatList inverted={true}` — нові внизу.
-- `onEndReached` — довантаження при скролі вгору.
-
-### 🛠 Додатково
-
-- **MessageActionsModal** — кастомне меню дій (працює на web).
+🔗 **Білд:** https://expo.dev/accounts/nikita2009/projects/modern-chat/builds
