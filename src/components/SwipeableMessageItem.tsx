@@ -1,6 +1,6 @@
 // src/components/SwipeableMessageItem.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -11,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Id } from "../../convex/_generated/dataModel";
 import { COLORS } from "../constants/theme";
+import { ReactionBadges } from "./ReactionBadges";
 
 export interface MessageItemData {
   _id: Id<"messages">;
@@ -23,6 +24,8 @@ export interface MessageItemData {
   replyToId?: Id<"messages">;
   replyToSender?: string;
   replyToText?: string;
+  audioUrl?: string;
+  audioDuration?: number;
   _creationTime: number;
 }
 
@@ -33,6 +36,7 @@ interface SwipeableMessageItemProps {
   onReply: (message: MessageItemData) => void;
   onImagePress?: (url: string) => void;
   onAuthorPress?: (userId: Id<"users">) => void;
+  onDoubleTap?: () => void;
 }
 
 const SWIPE_THRESHOLD = 50;
@@ -44,8 +48,10 @@ export const SwipeableMessageItem: React.FC<SwipeableMessageItemProps> = ({
   onReply,
   onImagePress,
   onAuthorPress,
+  onDoubleTap,
 }) => {
   const translateX = useSharedValue(0);
+  const [lastTap, setLastTap] = useState(0);
 
   const triggerReply = () => {
     onReply(item);
@@ -77,24 +83,53 @@ export const SwipeableMessageItem: React.FC<SwipeableMessageItemProps> = ({
     };
   });
 
+  const handleTap = () => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      onDoubleTap?.();
+    }
+    setLastTap(now);
+  };
+
   return (
-    <View className="relative justify-center my-1">
+    <View
+      style={{
+        width: "100%",
+        paddingHorizontal: 16,
+        marginVertical: 4,
+        alignItems: isOwn ? "flex-end" : "flex-start",
+      }}
+    >
+      {/* Иконка reply слева */}
       <Animated.View
-        style={animatedIconStyle}
-        className="absolute left-2 z-0 items-center justify-center w-8 h-8 rounded-full bg-primary/30"
+        style={[
+          animatedIconStyle,
+          {
+            position: "absolute",
+            left: 4,
+            top: "50%",
+            marginTop: -16,
+          },
+        ]}
+        className="items-center justify-center w-8 h-8 rounded-full bg-primary/30"
       >
         <Ionicons name="arrow-undo" size={18} color={COLORS.primary} />
       </Animated.View>
 
       <GestureDetector gesture={panGesture}>
         <Animated.View
-          style={animatedBubbleStyle}
-          className={`flex-row ${isOwn ? "justify-end" : "justify-start"}`}
+          style={[
+            animatedBubbleStyle,
+            {
+              maxWidth: "80%",
+            },
+          ]}
         >
           <TouchableOpacity
             activeOpacity={0.9}
             onLongPress={onLongPress}
-            className={`max-w-[82%] rounded-2xl p-3 ${
+            onPress={handleTap}
+            className={`rounded-2xl p-3 ${
               isOwn
                 ? "bg-primary rounded-br-none"
                 : "bg-secondary rounded-bl-none border border-surfaceLight"
@@ -133,7 +168,7 @@ export const SwipeableMessageItem: React.FC<SwipeableMessageItemProps> = ({
               >
                 <Image
                   source={{ uri: item.imageUrl }}
-                  className="w-56 h-56 rounded-xl mb-1.5 bg-surface"
+                  style={{ width: 200, height: 200, borderRadius: 12 }}
                   resizeMode="cover"
                 />
               </TouchableOpacity>
@@ -157,6 +192,9 @@ export const SwipeableMessageItem: React.FC<SwipeableMessageItemProps> = ({
               </Text>
             </View>
           </TouchableOpacity>
+
+          {/* Бейджи реакций под бульбашкой */}
+          <ReactionBadges messageId={item._id} />
         </Animated.View>
       </GestureDetector>
     </View>

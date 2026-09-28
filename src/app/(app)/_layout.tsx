@@ -1,4 +1,3 @@
-// src/app/(app)/_layout.tsx
 import { Stack } from "expo-router";
 import { COLORS } from "../../constants/theme";
 
@@ -15,38 +14,7 @@ export default function AppLayout() {
     >
       <Stack.Screen
         name="index"
-        options={{
-          title: "Чат-кімнати",
-          headerLargeTitle: true,
-        }}
-      />
-      <Stack.Screen
-        name="new-room"
-        options={{
-          presentation: "modal",
-          title: "Нова кімната",
-        }}
-      />
-      <Stack.Screen
-        name="profile"
-        options={{
-          presentation: "modal",
-          title: "Профіль",
-        }}
-      />
-      <Stack.Screen
-        name="chat/[id]"
-        options={{
-          title: "Чат",
-          headerBackTitle: "Назад",
-        }}
-      />
-      <Stack.Screen
-        name="settings/[id]"
-        options={{
-          presentation: "modal",
-          title: "Інформація про кімнату",
-        }}
+        options={{ title: "Чат-кімнати", headerLargeTitle: true }}
       />
     </Stack>
   );
