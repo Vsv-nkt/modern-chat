@@ -1,6 +1,7 @@
 // convex/reactions.ts
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 
 export const toggleReaction = mutation({
@@ -12,6 +13,11 @@ export const toggleReaction = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Необхідно авторизуватися");
+    }
+
+    const message = await ctx.db.get(args.messageId);
+    if (!message) {
+      throw new Error("Повідомлення не знайдено");
     }
 
     const existing = await ctx.db
@@ -32,6 +38,35 @@ export const toggleReaction = mutation({
         emoji: args.emoji,
         createdAt: Date.now(),
       });
+
+      // ============ PUSH-СПОВІЩЕННЯ ПРИ РЕАКЦІЇ ============
+      if (message.senderId !== userId) {
+        const messageAuthor = await ctx.db.get(message.senderId);
+        const sender = await ctx.db.get(userId);
+        const room = await ctx.db.get(message.chatRoomId);
+
+        if (messageAuthor?.pushToken && sender) {
+          const senderName = sender.name ?? sender.email ?? "Співрозмовник";
+          const roomTitle = room?.title ?? "чаті";
+
+          await ctx.scheduler.runAfter(
+            0,
+            internal.pushNotifications.sendPushNotification,
+            {
+              pushToken: messageAuthor.pushToken,
+              title: `Нова реакція ${args.emoji}`,
+              body: `${senderName} відреагував(ла) ${args.emoji} на ваше повідомлення у "${roomTitle}"`,
+              data: {
+                type: "reaction",
+                roomId: message.chatRoomId,
+                messageId: message._id,
+              },
+            },
+          );
+        }
+      }
+      // ============ КІНЕЦЬ PUSH ============
+
       return { action: "added", emoji: args.emoji };
     }
   },

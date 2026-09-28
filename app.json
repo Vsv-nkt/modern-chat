@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "modern-chat",
+    "name": "Modern Chat",
     "slug": "modern-chat",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,18 +9,18 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Додатку Modern Chat потрібен доступ до мікрофона для запису голосових повідомлень.",
+        "NSMicrophoneUsageDescription": "Modern Chat потрібен доступ до мікрофона для запису голосових повідомлень.",
         "NSCameraUsageDescription": "Modern Chat потрібен доступ до камери для запису відеокружечків."
       },
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.nikita2009.modernchat",
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -28,8 +28,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "package": "com.nikita2009.modernchat"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -50,12 +49,20 @@
           "cameraPermission": "Modern Chat потрібен доступ до камери для запису відеокружечків.",
           "microphonePermission": "Modern Chat потрібен доступ до мікрофона для запису звуку у відеокружечках."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2563EB",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2d06db2a-cd9c-4485-9298-fbb16a8fc686"
+        "projectId": "de77856f-5084-4154-b391-b3cf0b06ca29"
       }
     },
     "owner": "nikita2009"

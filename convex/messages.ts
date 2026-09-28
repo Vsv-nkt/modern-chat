@@ -2,6 +2,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 
 export const listMessages = query({
@@ -67,6 +69,82 @@ export const sendMessage = mutation({
       lastMessage: `${user.name ?? "Гравець"}: ${trimmedContent}`,
       lastMessageAt: Date.now(),
     });
+
+    // ============ PUSH-СПОВІЩЕННЯ ============
+    const room = await ctx.db.get(args.chatRoomId);
+    const senderName = user.name ?? user.email ?? "Співрозмовник";
+    const roomTitle = room?.title ?? "Чат";
+
+    let replyAuthorId: Id<"users"> | null = null;
+
+    // Сценарій А: Reply
+    if (args.replyToId) {
+      const originalMessage = await ctx.db.get(args.replyToId);
+      if (originalMessage && originalMessage.senderId !== userId) {
+        replyAuthorId = originalMessage.senderId;
+        const originalAuthor = await ctx.db.get(originalMessage.senderId);
+
+        if (originalAuthor?.pushToken) {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.pushNotifications.sendPushNotification,
+            {
+              pushToken: originalAuthor.pushToken,
+              title: `💬 Відповідь від ${senderName}`,
+              body: `${senderName} відповів(-ла) у "${roomTitle}": ${trimmedContent}`,
+              data: {
+                type: "reply",
+                roomId: args.chatRoomId,
+                messageId,
+              },
+            },
+          );
+        }
+      }
+    }
+
+    // Сценарій Б: Решті учасників
+    const recentMessages = await ctx.db
+      .query("messages")
+      .withIndex("by_chat_room", (q) => q.eq("chatRoomId", args.chatRoomId))
+      .collect();
+
+    const recipientIds = new Set<Id<"users">>();
+
+    if (
+      room?.creatorId &&
+      room.creatorId !== userId &&
+      room.creatorId !== replyAuthorId
+    ) {
+      recipientIds.add(room.creatorId);
+    }
+
+    for (const msg of recentMessages) {
+      if (msg.senderId !== userId && msg.senderId !== replyAuthorId) {
+        recipientIds.add(msg.senderId);
+      }
+    }
+
+    for (const recipientId of recipientIds) {
+      const recipient = await ctx.db.get(recipientId);
+      if (recipient?.pushToken) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.pushNotifications.sendPushNotification,
+          {
+            pushToken: recipient.pushToken,
+            title: `${senderName} (${roomTitle})`,
+            body: trimmedContent,
+            data: {
+              type: "message",
+              roomId: args.chatRoomId,
+              messageId,
+            },
+          },
+        );
+      }
+    }
+    // ============ КІНЕЦЬ PUSH ============
 
     return messageId;
   },

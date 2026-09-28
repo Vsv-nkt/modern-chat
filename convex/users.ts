@@ -90,3 +90,23 @@ export const getUserProfile = query({
     };
   },
 });
+/**
+ * Зберігає ExponentPushToken поточного користувача
+ */
+export const savePushToken = mutation({
+  args: {
+    pushToken: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Unauthorized: Потрібна авторизація");
+    }
+
+    await ctx.db.patch(userId, {
+      pushToken: args.pushToken,
+    });
+
+    return { success: true };
+  },
+});
