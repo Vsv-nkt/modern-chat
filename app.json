@@ -57,7 +57,8 @@
           "color": "#2563EB",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},

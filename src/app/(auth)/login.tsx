@@ -1,19 +1,23 @@
 // src/app/(auth)/login.tsx
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Ionicons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { signIn } = useAuthActions();
@@ -23,15 +27,16 @@ export default function LoginScreen() {
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Помилка", "Будь ласка, заповніть усі поля.");
+      Alert.alert("Помилка", "Заповніть усі поля.");
       return;
     }
 
     if (isSignUp && !name.trim()) {
-      Alert.alert("Помилка", "Будь ласка, вкажіть ваше ім'я.");
+      Alert.alert("Помилка", "Вкажіть ім'я.");
       return;
     }
 
@@ -57,11 +62,41 @@ export default function LoginScreen() {
       Alert.alert(
         "Помилка",
         isSignUp
-          ? "Не вдалося зареєструватися. Можливо, пошта вже зайнята."
+          ? "Не вдалося зареєструватися."
           : "Неправильний email або пароль.",
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsGoogleLoading(true);
+
+      const redirectTo = Linking.createURL("");
+      console.log("Redirect To:", redirectTo);
+
+      const { redirect } = await signIn("google", { redirectTo });
+      if (!redirect) return;
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        redirect.toString(),
+        redirectTo,
+      );
+
+      if (result.type === "success" && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get("code");
+        if (code) {
+          await signIn("google", { code });
+        }
+      }
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      Alert.alert("Помилка входу", "Не вдалося авторизуватися через Google.");
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -78,13 +113,11 @@ export default function LoginScreen() {
           <View className="w-20 h-20 rounded-3xl bg-primary/20 items-center justify-center border border-primary/30">
             <Ionicons name="chatbubbles" size={38} color={COLORS.primary} />
           </View>
-          <Text className="text-3xl font-bold text-white mt-5 tracking-tight">
+          <Text className="text-3xl font-bold text-white mt-5">
             Modern Chat
           </Text>
           <Text className="text-sm text-textMuted mt-2 text-center px-6">
-            {isSignUp
-              ? "Створіть акаунт для спілкування в кімнатах"
-              : "Увійдіть, щоб продовжити спілкування"}
+            {isSignUp ? "Створіть акаунт" : "Увійдіть, щоб продовжити"}
           </Text>
         </View>
 
@@ -103,7 +136,6 @@ export default function LoginScreen() {
                 placeholderTextColor={COLORS.textMuted}
                 value={name}
                 onChangeText={setName}
-                autoCapitalize="words"
               />
             </View>
           )}
@@ -123,7 +155,6 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              autoCorrect={false}
             />
           </View>
 
@@ -146,10 +177,9 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
-            className={`flex-row items-center justify-center bg-primary rounded-2xl py-4 w-full max-w-sm mt-3 active:bg-primaryDark ${
+            className={`flex-row items-center justify-center bg-primary rounded-2xl py-4 w-full max-w-sm ${
               isLoading ? "opacity-60" : ""
             }`}
-            activeOpacity={0.85}
             onPress={handleAuth}
             disabled={isLoading}
           >
@@ -159,6 +189,36 @@ export default function LoginScreen() {
               <Text className="text-white text-base font-bold">
                 {isSignUp ? "Зареєструватися" : "Увійти"}
               </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Разделитель */}
+          <View className="flex-row items-center w-full max-w-sm my-2">
+            <View className="flex-1 h-[1px] bg-surfaceLight" />
+            <Text className="mx-3 text-textMuted text-xs uppercase">або</Text>
+            <View className="flex-1 h-[1px] bg-surfaceLight" />
+          </View>
+
+          {/* Google кнопка */}
+          <TouchableOpacity
+            className="flex-row items-center justify-center bg-secondary border border-surfaceLight rounded-2xl py-4 w-full max-w-sm"
+            onPress={handleGoogleSignIn}
+            disabled={isGoogleLoading || isLoading}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator color={COLORS.primary} size="small" />
+            ) : (
+              <>
+                <Ionicons
+                  name="logo-google"
+                  size={20}
+                  color="#EA4335"
+                  style={{ marginRight: 10 }}
+                />
+                <Text className="text-white text-base font-semibold">
+                  Продовжити з Google
+                </Text>
+              </>
             )}
           </TouchableOpacity>
 
